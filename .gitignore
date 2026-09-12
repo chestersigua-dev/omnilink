@@ -1,0 +1,21 @@
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Databases & local state
+omnilink.db
+*.sqlite3
+
+# Uploads
+uploads/avatars/*
+!uploads/avatars/.gitkeep
+
+# Environment
+.env

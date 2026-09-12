@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OmniLink | Universal IoT Orchestration Platform</title>
+  <meta name="description" content="Monolithic IoT device discovery, multi-brand adapters, and custom group orchestration for Xiaomi, Tapo, Samsung, LG, and TCL.">
+  <link rel="icon" type="image/svg+xml" href="/static/images/logo.svg">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- Custom Glassmorphism Styles -->
+  <link rel="stylesheet" href="/static/css/styles.css">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-[#090d16] text-slate-100 min-h-screen selection:bg-indigo-500 selection:text-white relative overflow-x-hidden">
+
+  <!-- Ambient Glow Backgrounds -->
+  <div class="fixed top-[-10%] left-[-10%] w-[40vw] h-[40vw] rounded-full bg-indigo-600/10 blur-[120px] pointer-events-none z-0"></div>
+  <div class="fixed bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] rounded-full bg-sky-600/10 blur-[120px] pointer-events-none z-0"></div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-auto"></div>
+
+  <!-- ================= AUTHENTICATION VIEW ================= -->
+  <div id="authView" class="min-h-screen flex items-center justify-center p-4 relative z-10">
+    <div class="w-full max-w-md">
+      
+      <!-- Brand Logo Header -->
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center p-3 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 mb-4 shadow-xl shadow-indigo-600/20">
+          <img src="/static/images/logo.svg" alt="OmniLink Logo" class="w-10 h-10">
+        </div>
+        <h1 class="text-3xl font-extrabold text-white tracking-tight">OmniLink</h1>
+        <p class="text-xs uppercase tracking-widest text-indigo-400 font-semibold mt-1">Universal Embedded IoT Platform</p>
+        <p class="text-xs text-slate-400 mt-2">Xiaomi • TP-Link Tapo • Samsung • LG • TCL</p>
+      </div>
+
+      <!-- Auth Glass Card -->
+      <div class="glass-panel rounded-3xl p-8 shadow-2xl relative">
+        <h2 id="authFormTitle" class="text-xl font-bold text-white mb-6">Sign In to OmniLink</h2>
+        
+        <form id="authForm" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Username</label>
+            <input 
+              type="text" 
+              id="authUsername" 
+              required 
+              placeholder="e.g. admin" 
+              class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+            />
+          </div>
+
+          <div id="registerExtraFields" class="space-y-4 hidden">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Full Name</label>
+              <input 
+                type="text" 
+                id="authFullName" 
+                placeholder="e.g. Dr. Alex Vance" 
+                class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Email Address</label>
+              <input 
+                type="email" 
+                id="authEmail" 
+                placeholder="alex@example.com" 
+                class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Password</label>
+            <input 
+              type="password" 
+              id="authPassword" 
+              required 
+              placeholder="••••••••" 
+              class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+            />
+          </div>
+
+          <button 
+            type="submit" 
+            id="authSubmitBtn"
+            class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold text-sm shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 transition-all mt-4"
+          >
+            Sign In
+          </button>
+        </form>
+
+        <div class="mt-6 pt-6 border-t border-slate-800 text-center">
+          <button id="authToggleMode" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
+            Need an account? Create one
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-6 text-center text-xs text-slate-500">
+        Capstone Demonstration System • Zero-Config Monolith
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DASHBOARD VIEW ================= -->
+  <div id="dashboardView" class="min-h-screen hidden flex flex-col relative z-10">
+    
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-30 glass-panel border-b border-white/5 px-6 py-4">
+      <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+        
+        <!-- Brand / Identity -->
+        <div class="flex items-center gap-3">
+          <img src="/static/images/logo.svg" alt="OmniLink Logo" class="w-8 h-8">
+          <div>
+            <span class="font-heading font-extrabold text-lg text-white tracking-tight">OmniLink</span>
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="text-[11px] text-slate-400 font-mono">Adapter Engine Active</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Center Actions -->
+        <div class="flex items-center gap-3">
+          <button 
+            onclick="openScanModal()"
+            class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 transition-all"
+          >
+            <i data-lucide="radar" class="w-4 h-4"></i>
+            <span>Scan Network</span>
+          </button>
+
+          <button 
+            onclick="openCreateGroupModal()"
+            class="flex items-center gap-2 px-3.5 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700/60 transition-colors"
+          >
+            <i data-lucide="folder-plus" class="w-4 h-4"></i>
+            <span>New Group</span>
+          </button>
+        </div>
+
+        <!-- User Profile Nav Trigger -->
+        <div class="flex items-center gap-3">
+          <button 
+            onclick="openProfileModal()"
+            class="flex items-center gap-2.5 p-1.5 pr-3 rounded-full bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 transition-all"
+          >
+            <img id="navUserAvatar" src="/static/images/default_avatar.svg" alt="Avatar" class="w-7 h-7 rounded-full object-cover border border-indigo-500/40">
+            <span id="navUserName" class="text-xs font-semibold text-slate-200">User</span>
+          </button>
+          
+          <button 
+            id="navLogoutBtn"
+            class="text-slate-400 hover:text-rose-400 p-2 rounded-xl hover:bg-rose-500/10 transition-colors"
+            title="Sign Out"
+          >
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-8">
+      
+      <!-- Metrics Overview Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass-panel rounded-2xl p-5 border-l-4 border-indigo-500 flex items-center justify-between">
+          <div>
+            <div class="text-xs font-medium text-slate-400">Total Devices</div>
+            <div id="statTotalDevices" class="text-2xl font-extrabold text-white mt-1">0</div>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+            <i data-lucide="hard-drive" class="w-5 h-5"></i>
+          </div>
+        </div>
+
+        <div class="glass-panel rounded-2xl p-5 border-l-4 border-emerald-500 flex items-center justify-between">
+          <div>
+            <div class="text-xs font-medium text-slate-400">Powered ON</div>
+            <div id="statPoweredOn" class="text-2xl font-extrabold text-emerald-400 mt-1">0</div>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+            <i data-lucide="zap" class="w-5 h-5"></i>
+          </div>
+        </div>
+
+        <div class="glass-panel rounded-2xl p-5 border-l-4 border-sky-500 flex items-center justify-between">
+          <div>
+            <div class="text-xs font-medium text-slate-400">Custom Groups</div>
+            <div id="statTotalGroups" class="text-2xl font-extrabold text-sky-400 mt-1">0</div>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center">
+            <i data-lucide="layers" class="w-5 h-5"></i>
+          </div>
+        </div>
+
+        <div class="glass-panel rounded-2xl p-5 border-l-4 border-purple-500 flex items-center justify-between">
+          <div>
+            <div class="text-xs font-medium text-slate-400">Multi-Brand Engine</div>
+            <div class="text-sm font-bold text-purple-300 mt-1">5 Active Adapters</div>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Groups & Batch Orchestration Section -->
+      <section>
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white tracking-tight">Zones & Orchestration Groups</h2>
+            <p class="text-xs text-slate-400">Batch control multiple IoT appliances with parallel asynchronous execution</p>
+          </div>
+          <button 
+            onclick="openCreateGroupModal()"
+            class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+          >
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+            Create Zone
+          </button>
+        </div>
+
+        <div id="groupsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Dynamically populated by app.js -->
+        </div>
+      </section>
+
+      <!-- Connected IoT Devices Section -->
+      <section>
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div>
+            <h2 class="text-lg font-bold text-white tracking-tight">Connected Devices</h2>
+            <p class="text-xs text-slate-400">Interactive live control across Xiaomi, TP-Link, Samsung, LG, and TCL</p>
+          </div>
+
+          <!-- Brand Filters & Search Filter Bar -->
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Search -->
+            <div class="relative min-w-[200px]">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+              <input 
+                type="text" 
+                id="deviceSearchInput" 
+                placeholder="Search device, IP..." 
+                class="bg-slate-900/90 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-full"
+              />
+            </div>
+
+            <!-- Brand Filter Buttons -->
+            <div class="flex items-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800">
+              <button data-brand="all" class="brand-filter-btn px-3 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition-all">All</button>
+              <button data-brand="xiaomi" class="brand-filter-btn px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white transition-all">Xiaomi</button>
+              <button data-brand="tapo" class="brand-filter-btn px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white transition-all">Tapo</button>
+              <button data-brand="samsung" class="brand-filter-btn px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white transition-all">Samsung</button>
+              <button data-brand="lg" class="brand-filter-btn px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white transition-all">LG</button>
+              <button data-brand="tcl" class="brand-filter-btn px-3 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white transition-all">TCL</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Devices Grid -->
+        <div id="devicesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <!-- Dynamically populated by app.js -->
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="glass-panel border-t border-white/5 py-4 px-6 text-center text-xs text-slate-500 mt-auto">
+      OmniLink Embedded IoT Systems Architecture • Unified Multi-Brand Engine
+    </footer>
+  </div>
+
+  <!-- ================= NETWORK SCANNER MODAL ================= -->
+  <div id="scanModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm hidden">
+    <div class="glass-panel rounded-3xl w-full max-w-xl p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+            <i data-lucide="radar" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-white text-base">Network Subnet Discovery</h3>
+            <p class="text-xs text-slate-400">mDNS (zeroconf) & SSDP / UDP Broadcast Scan</p>
+          </div>
+        </div>
+        <button onclick="closeScanModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <!-- Radar Animation -->
+      <div class="py-6 flex flex-col items-center justify-center border-b border-slate-800/80">
+        <div class="radar-container mb-4">
+          <div class="radar-sweep"></div>
+          <div class="radar-circle" style="width: 70px; height: 70px;"></div>
+          <div class="radar-circle" style="width: 140px; height: 140px;"></div>
+          <div class="radar-circle" style="width: 210px; height: 210px;"></div>
+          <!-- Simulated Blips -->
+          <div class="radar-dot" style="top: 35%; left: 65%;"></div>
+          <div class="radar-dot" style="top: 70%; left: 30%; animation-delay: 0.7s;"></div>
+          <div class="radar-dot" style="top: 25%; left: 25%; animation-delay: 1.2s;"></div>
+        </div>
+        <div id="radarScanStatus" class="text-xs font-mono text-indigo-300">Scanning local subnet...</div>
+      </div>
+
+      <!-- Scan Controls -->
+      <div class="flex items-center justify-between py-3 px-2 border-b border-slate-800 text-xs">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" id="forceSimToggle" checked class="rounded text-indigo-600 focus:ring-0">
+          <span class="text-slate-300 font-medium">Demonstration Mode (5-Brand Virtual Devices)</span>
+        </label>
+        <button 
+          onclick="startNetworkScan()"
+          class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold transition-all flex items-center gap-1.5"
+        >
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+          Rescan
+        </button>
+      </div>
+
+      <!-- Discovered Devices List -->
+      <div class="flex-1 overflow-y-auto py-4 space-y-3 min-h-[160px]" id="discoveredList">
+        <!-- Discovered items populated here -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="pt-4 border-t border-slate-800 flex justify-end">
+        <button 
+          onclick="closeScanModal()" 
+          class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold transition-colors"
+        >
+          Close
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= CREATE / EDIT GROUP MODAL ================= -->
+  <div id="groupModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm hidden">
+    <div class="glass-panel rounded-3xl w-full max-w-lg p-6 shadow-2xl relative">
+      
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <h3 id="groupModalTitle" class="font-bold text-white text-base">Create Device Group</h3>
+        <button onclick="closeGroupModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <div class="py-4 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Group / Zone Name</label>
+          <input 
+            type="text" 
+            id="groupNameInput" 
+            placeholder="e.g. Master Bedroom, Night Routine" 
+            class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Description</label>
+          <input 
+            type="text" 
+            id="groupDescInput" 
+            placeholder="e.g. Evening relaxation appliances and lights" 
+            class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Assign Devices</label>
+          <div id="groupDevicesList" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+            <!-- Checkboxes generated by app.js -->
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-4 border-t border-slate-800 flex justify-end gap-2">
+        <button onclick="closeGroupModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold">Cancel</button>
+        <button onclick="saveGroupForm()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/30">Save Group</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= USER PROFILE MODAL ================= -->
+  <div id="profileModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm hidden">
+    <div class="glass-panel rounded-3xl w-full max-w-lg p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <h3 class="font-bold text-white text-base">User Profile & Account</h3>
+        <button onclick="closeProfileModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+      </div>
+
+      <div class="py-6 space-y-6">
+        <!-- Avatar Section -->
+        <div class="flex items-center gap-5">
+          <div class="relative group cursor-pointer" onclick="document.getElementById('avatarFileInput').click()">
+            <img id="modalAvatarPreview" src="/static/images/default_avatar.svg" alt="Profile Avatar" class="w-20 h-20 rounded-2xl object-cover border-2 border-indigo-500/50 shadow-lg">
+            <div class="absolute inset-0 rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs">
+              <i data-lucide="camera" class="w-5 h-5"></i>
+            </div>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-white">Profile Photo</h4>
+            <p class="text-xs text-slate-400 mb-2">Supports PNG, JPG, or WebP</p>
+            <input type="file" id="avatarFileInput" accept="image/png,image/jpeg,image/webp" class="hidden" />
+            <button 
+              onclick="document.getElementById('avatarFileInput').click()"
+              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors"
+            >
+              Upload Photo
+            </button>
+          </div>
+        </div>
+
+        <!-- Form details -->
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Full Name</label>
+            <input 
+              type="text" 
+              id="profileFullName" 
+              class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Email Address</label>
+            <input 
+              type="email" 
+              id="profileEmail" 
+              class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Bio / Notes</label>
+            <textarea 
+              id="profileBio" 
+              rows="3" 
+              placeholder="e.g. Smart home administrator for the main residence"
+              class="w-full bg-slate-900/80 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+            ></textarea>
+          </div>
+        </div>
+
+        <button 
+          onclick="handleSaveProfile()"
+          class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-indigo-600/30 transition-all"
+        >
+          Save Changes
+        </button>
+
+        <!-- Danger Zone -->
+        <div class="pt-6 border-t border-slate-800">
+          <h5 class="text-xs font-bold text-rose-400 uppercase tracking-wider mb-1">Danger Zone</h5>
+          <p class="text-xs text-slate-400 mb-3">Deleting your account removes all connected devices, custom groups, and profile assets.</p>
+          <button 
+            onclick="handleDeleteAccount()"
+            class="px-4 py-2 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-xl text-xs font-semibold transition-all"
+          >
+            Delete My Account
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/app.js"></script>
+  <script>
+    // Initialize icons on load
+    lucide.createIcons();
+  </script>
+</body>
+</html>

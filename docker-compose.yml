@@ -1,0 +1,17 @@
+services:
+  omnilink:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omnilink_monolith
+    # network_mode: host enables raw socket broadcast for mDNS (zeroconf) and SSDP LAN discovery
+    network_mode: "host"
+    restart: unless-stopped
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - SIMULATION_MODE=true
+      - JWT_SECRET=omnilink_production_capstone_jwt_secret_2026
+    volumes:
+      - ./omnilink.db:/app/omnilink.db
+      - ./uploads:/app/uploads
