@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from backend.config import STATIC_DIR, UPLOAD_DIR, AVATARS_DIR, HOST, PORT, SIMULATION_MODE
+from backend.config import STATIC_DIR, UPLOAD_DIR, AVATARS_DIR, HOST, PORT, SIMULATION_MODE, is_simulation_mode
 from backend.database import init_db
 from backend.routes.auth_routes import router as auth_router
 from backend.routes.user_routes import router as user_router
@@ -66,7 +66,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "OmniLink Monolith",
-        "simulation_mode": SIMULATION_MODE,
+        "simulation_mode": is_simulation_mode(),
         "supported_brands": ["xiaomi", "tapo", "samsung", "lg", "tcl"]
     }
 

@@ -8,8 +8,12 @@ from backend.models import User, Device
 from backend.auth import get_current_user
 from backend.scanner import scan_network
 from backend.adapters import get_adapter
+from backend.config import is_simulation_mode, set_simulation_mode
 
 router = APIRouter(prefix="/api/iot", tags=["IoT Devices & Discovery"])
+
+class SimulationToggleRequest(BaseModel):
+    simulation_mode: bool
 
 class AddDeviceRequest(BaseModel):
     device_uid: str
@@ -35,17 +39,45 @@ class DeviceControlRequest(BaseModel):
     parameter: Optional[str] = "level" # "brightness", "volume", "temperature", "speed"
     value: Optional[int] = None
 
+@router.get("/simulation")
+def get_simulation_status():
+    """Get current global simulation mode state."""
+    active = is_simulation_mode()
+    return {
+        "simulation_mode": active,
+        "status": "enabled" if active else "disabled",
+        "description": "Virtual devices active" if active else "Physical LAN discovery active"
+    }
+
+@router.post("/simulation")
+def update_simulation_status(
+    req: SimulationToggleRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Dynamically toggle global simulation mode."""
+    new_state = set_simulation_mode(req.simulation_mode)
+    return {
+        "simulation_mode": new_state,
+        "status": "enabled" if new_state else "disabled",
+        "message": f"Simulation mode {'enabled' if new_state else 'disabled (Physical IoT Mode Active)'}"
+    }
+
 @router.get("/scan")
 async def scan_iot_devices(
-    force_simulation: Optional[bool] = Query(False),
+    force_simulation: Optional[bool] = Query(None),
+    disable_simulation: Optional[bool] = Query(False),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Scan subnet via mDNS and SSDP broadcast.
+    If disable_simulation=True, simulation is disabled and only real physical devices are searched.
     Returns list of discovered units, annotating whether they are already added to user's dashboard.
     """
-    discovered = await scan_network(force_simulation=force_simulation)
+    discovered = await scan_network(
+        force_simulation=force_simulation,
+        disable_simulation=bool(disable_simulation)
+    )
     
     # Check which devices are already registered by the user
     user_device_uids = {
@@ -58,10 +90,13 @@ async def scan_iot_devices(
         dev_copy["is_registered"] = item["device_uid"] in user_device_uids
         results.append(dev_copy)
 
+    mode = "physical" if disable_simulation or (not force_simulation and not is_simulation_mode()) else "simulation"
+
     return {
         "count": len(results),
         "devices": results,
-        "mode": "simulation" if force_simulation else "auto"
+        "mode": mode,
+        "simulation_disabled": bool(disable_simulation or not is_simulation_mode())
     }
 
 @router.get("/devices")

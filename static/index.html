@@ -147,6 +147,17 @@
 
         <!-- Center Actions -->
         <div class="flex items-center gap-3">
+          <!-- Global Simulation Mode Toggle Pill -->
+          <button 
+            id="globalSimToggleBtn"
+            onclick="toggleGlobalSimulationMode()"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 transition-all shadow-sm"
+            title="Click to toggle between Physical LAN Hardware Mode and Demo Simulation Mode"
+          >
+            <span id="globalSimDot" class="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
+            <span id="globalSimText">Virtual Simulation</span>
+          </button>
+
           <button 
             onclick="openScanModal()"
             class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 transition-all"
@@ -333,19 +344,49 @@
         <div id="radarScanStatus" class="text-xs font-mono text-indigo-300">Scanning local subnet...</div>
       </div>
 
-      <!-- Scan Controls -->
-      <div class="flex items-center justify-between py-3 px-2 border-b border-slate-800 text-xs">
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" id="forceSimToggle" checked class="rounded text-indigo-600 focus:ring-0">
-          <span class="text-slate-300 font-medium">Demonstration Mode (5-Brand Virtual Devices)</span>
-        </label>
-        <button 
-          onclick="startNetworkScan()"
-          class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold transition-all flex items-center gap-1.5"
-        >
-          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-          Rescan
-        </button>
+      <!-- Scan Controls & Simulation Selector -->
+      <div class="py-3 px-1 border-b border-slate-800 flex flex-col gap-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Discovery Engine Mode</span>
+          <span id="scanModeBadge" class="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+            Demo Simulation
+          </span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 p-1 bg-slate-900/90 rounded-xl border border-slate-800 text-xs">
+          <button 
+            type="button"
+            id="scanModePhysicalBtn"
+            onclick="setScanMode('physical')"
+            class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-medium transition-all text-slate-400 hover:text-white"
+          >
+            <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
+            <span>Physical IoT (No Sim)</span>
+          </button>
+          <button 
+            type="button"
+            id="scanModeSimBtn"
+            onclick="setScanMode('simulation')"
+            class="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-medium transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold"
+          >
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span>Virtual Devices (Demo)</span>
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between pt-0.5">
+          <p id="scanModeHint" class="text-[11px] text-slate-400">
+            Simulates responsive Xiaomi, Tapo, Samsung, LG, and TCL devices.
+          </p>
+          <button 
+            onclick="startNetworkScan()"
+            id="rescanBtn"
+            class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 shadow-md shadow-indigo-600/20"
+          >
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            Rescan
+          </button>
+        </div>
       </div>
 
       <!-- Discovered Devices List -->

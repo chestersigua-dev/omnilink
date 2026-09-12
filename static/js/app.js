@@ -11,14 +11,67 @@ const state = {
   searchQuery: "",
   discoveredDevices: [],
   isScanning: false,
+  simulationMode: true,
+  scanMode: "simulation", // "simulation" | "physical"
   debounceTimers: {}
 };
 
 // DOM Content Loaded Handler
 document.addEventListener("DOMContentLoaded", async () => {
   initEventListeners();
+  await fetchSimulationStatus();
   await checkAuthSession();
 });
+
+// Fetch Global Simulation Mode from API
+async function fetchSimulationStatus() {
+  try {
+    const res = await window.api.getSimulationMode();
+    state.simulationMode = Boolean(res.simulation_mode);
+    state.scanMode = state.simulationMode ? "simulation" : "physical";
+    updateSimulationUI();
+  } catch (err) {
+    console.warn("Could not fetch initial simulation status:", err);
+  }
+}
+
+function updateSimulationUI() {
+  const btn = document.getElementById("globalSimToggleBtn");
+  const dot = document.getElementById("globalSimDot");
+  const text = document.getElementById("globalSimText");
+  if (!btn || !dot || !text) return;
+
+  if (state.simulationMode) {
+    btn.className = "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 transition-all shadow-sm";
+    dot.className = "w-2 h-2 rounded-full bg-indigo-400 animate-pulse";
+    text.textContent = "Virtual Simulation";
+    btn.title = "Simulation active. Click to disable simulation and switch to physical IoT discovery.";
+  } else {
+    btn.className = "flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-all shadow-sm";
+    dot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+    text.textContent = "Physical Hardware";
+    btn.title = "Physical IoT discovery active. Click to switch to virtual demonstration mode.";
+  }
+}
+
+async function toggleGlobalSimulationMode() {
+  const newMode = !state.simulationMode;
+  try {
+    const res = await window.api.setSimulationMode(newMode);
+    state.simulationMode = Boolean(res.simulation_mode);
+    state.scanMode = state.simulationMode ? "simulation" : "physical";
+    updateSimulationUI();
+    setScanMode(state.scanMode, false);
+    window.showToast(
+      state.simulationMode 
+        ? "Simulation Enabled: 5-Brand Virtual Devices Active" 
+        : "Simulation Disabled: Physical IoT Hardware Scan Active", 
+      "success"
+    );
+  } catch (err) {
+    window.showToast("Failed to update simulation mode: " + err.message, "error");
+  }
+}
 
 // Check Session & Bootstrap
 async function checkAuthSession() {
@@ -42,6 +95,7 @@ function setAuthenticatedUser(user) {
   
   // Update Profile UI
   updateNavbarProfile(user);
+  updateSimulationUI();
   
   // Load data
   refreshDashboard();
@@ -380,6 +434,8 @@ async function confirmDeleteGroup(groupId, groupName) {
 function openScanModal() {
   const modal = document.getElementById("scanModal");
   modal.classList.remove("hidden");
+  // Sync modal buttons with current state
+  setScanMode(state.scanMode, false);
   startNetworkScan();
 }
 
@@ -388,23 +444,89 @@ function closeScanModal() {
   modal.classList.add("hidden");
 }
 
+function setScanMode(mode, triggerScan = false) {
+  state.scanMode = mode;
+  const physBtn = document.getElementById("scanModePhysicalBtn");
+  const simBtn = document.getElementById("scanModeSimBtn");
+  const badge = document.getElementById("scanModeBadge");
+  const hint = document.getElementById("scanModeHint");
+
+  if (mode === "physical") {
+    if (physBtn) {
+      physBtn.className = "flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-semibold transition-all bg-emerald-600 text-white shadow-md shadow-emerald-600/30";
+    }
+    if (simBtn) {
+      simBtn.className = "flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-medium transition-all text-slate-400 hover:text-white";
+    }
+    if (badge) {
+      badge.className = "text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+      badge.textContent = "Physical LAN Discovery";
+    }
+    if (hint) {
+      hint.textContent = "Broadcasts mDNS Zeroconf & SSDP UPnP probes across your subnet. No virtual devices.";
+    }
+  } else {
+    if (physBtn) {
+      physBtn.className = "flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-medium transition-all text-slate-400 hover:text-white";
+    }
+    if (simBtn) {
+      simBtn.className = "flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg font-semibold transition-all bg-indigo-600 text-white shadow-md shadow-indigo-600/30";
+    }
+    if (badge) {
+      badge.className = "text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30";
+      badge.textContent = "Demo Simulation";
+    }
+    if (hint) {
+      hint.textContent = "Simulates responsive Xiaomi, Tapo, Samsung, LG, and TCL devices.";
+    }
+  }
+
+  lucide.createIcons();
+
+  if (triggerScan) {
+    startNetworkScan();
+  }
+}
+
 async function startNetworkScan() {
   const radarText = document.getElementById("radarScanStatus");
   const resultsContainer = document.getElementById("discoveredList");
-  const forceSim = document.getElementById("forceSimToggle").checked;
+  const rescanBtn = document.getElementById("rescanBtn");
+  const isPhysical = state.scanMode === "physical";
 
-  radarText.textContent = "Scanning local subnet (mDNS & SSDP broadcast)...";
-  resultsContainer.innerHTML = `<div class="py-8 text-center text-slate-400 text-sm">Searching for IoT hardware...</div>`;
+  if (rescanBtn) rescanBtn.disabled = true;
+
+  if (isPhysical) {
+    radarText.textContent = "Broadcasting mDNS & SSDP probes for physical IoT hardware...";
+    resultsContainer.innerHTML = `<div class="py-8 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+      <div class="animate-spin text-indigo-400">↻</div>
+      <span>Querying local network for physical smart devices...</span>
+    </div>`;
+  } else {
+    radarText.textContent = "Injecting virtual 5-brand IoT catalog...";
+    resultsContainer.innerHTML = `<div class="py-8 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+      <div class="animate-spin text-indigo-400">↻</div>
+      <span>Loading virtual devices catalog...</span>
+    </div>`;
+  }
 
   try {
-    const data = await window.api.scanDevices(forceSim);
-    state.discoveredDevices = data.devices;
+    const data = await window.api.scanDevices(
+      isPhysical ? { disableSimulation: true } : { forceSimulation: true }
+    );
+    state.discoveredDevices = data.devices || [];
     
-    radarText.textContent = `Discovery Complete: ${data.devices.length} Devices Detected`;
+    if (isPhysical) {
+      radarText.textContent = `Physical Discovery Complete: ${state.discoveredDevices.length} Hardware Device(s) Detected`;
+    } else {
+      radarText.textContent = `Virtual Catalog Active: ${state.discoveredDevices.length} Device(s) Injected`;
+    }
     renderDiscoveredDevices();
   } catch (err) {
     radarText.textContent = "Scan Failed: " + err.message;
     window.showToast("Scanner error: " + err.message, "error");
+  } finally {
+    if (rescanBtn) rescanBtn.disabled = false;
   }
 }
 
@@ -413,11 +535,46 @@ function renderDiscoveredDevices() {
   if (!container) return;
 
   if (state.discoveredDevices.length === 0) {
-    container.innerHTML = `<div class="py-6 text-center text-slate-400 text-sm">No devices found. Toggle "Demonstration Mode" to inject virtual devices.</div>`;
+    if (state.scanMode === "physical") {
+      container.innerHTML = `
+        <div class="py-6 text-center space-y-3 px-2">
+          <div class="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-400 mx-auto flex items-center justify-center border border-amber-500/20">
+            <i data-lucide="wifi-off" class="w-5 h-5"></i>
+          </div>
+          <div class="font-semibold text-white text-sm">No Physical IoT Devices Found</div>
+          <p class="text-xs text-slate-400 max-w-md mx-auto">
+            Zero smart devices responded to mDNS or SSDP broadcast on this local subnet.
+          </p>
+          <div class="text-[11px] text-slate-400 bg-slate-900/80 p-3 rounded-xl border border-slate-800 text-left space-y-1 max-w-md mx-auto">
+            <div>• Make sure your smart hardware (Xiaomi, Tapo, Samsung/LG TV) is powered on.</div>
+            <div>• Verify that your device and computer are on the same Wi-Fi subnet.</div>
+            <div>• Router "AP Client Isolation" must be disabled for local IoT discovery.</div>
+          </div>
+          <div class="pt-2 flex justify-center items-center gap-2">
+            <button onclick="startNetworkScan()" class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              Retry Physical Scan
+            </button>
+            <button onclick="setScanMode('simulation', true)" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+              Switch to Demo Mode
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      container.innerHTML = `<div class="py-6 text-center text-slate-400 text-sm">No devices found.</div>`;
+    }
+    lucide.createIcons();
     return;
   }
 
   container.innerHTML = state.discoveredDevices.map((dev, idx) => {
+    const isVirtual = dev.device_uid && dev.device_uid.startsWith("SIM_");
+    const sourceTag = isVirtual 
+      ? `<span class="px-1.5 py-0.2 rounded text-[10px] uppercase font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Virtual</span>`
+      : `<span class="px-1.5 py-0.2 rounded text-[10px] uppercase font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Physical</span>`;
+
     return `
       <div class="p-3 bg-slate-900/70 border border-slate-800 rounded-xl flex items-center justify-between gap-3">
         <div class="flex items-center gap-3">
@@ -425,11 +582,14 @@ function renderDiscoveredDevices() {
             <i data-lucide="${getDeviceIcon(dev.device_type)}" class="w-5 h-5"></i>
           </div>
           <div>
-            <div class="font-semibold text-white text-sm">${escapeHtml(dev.name)}</div>
-            <div class="text-xs text-slate-400 flex items-center gap-2">
+            <div class="font-semibold text-white text-sm flex items-center gap-2">
+              <span>${escapeHtml(dev.name)}</span>
+              ${sourceTag}
+            </div>
+            <div class="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
               <span class="badge-${dev.brand} px-1.5 py-0.2 rounded text-[10px] uppercase font-bold">${dev.brand}</span>
               <span>${dev.ip_address}</span>
-              <span class="text-slate-500 font-mono">${dev.mac_address}</span>
+              <span class="text-slate-500 font-mono text-[11px]">${dev.protocol || dev.mac_address}</span>
             </div>
           </div>
         </div>
@@ -441,7 +601,7 @@ function renderDiscoveredDevices() {
             <button 
               onclick="addDiscoveredDevice(${idx})"
               id="addBtn-${idx}"
-              class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5"
+              class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 shadow-md shadow-indigo-600/20"
             >
               <i data-lucide="plus" class="w-3.5 h-3.5"></i>
               Add

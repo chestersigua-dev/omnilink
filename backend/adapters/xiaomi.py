@@ -3,7 +3,7 @@ import json
 import socket
 from typing import Dict, Any
 from backend.adapters.base import BaseIoTAdapter
-from backend.config import SIMULATION_MODE
+from backend.config import is_simulation_mode
 
 class XiaomiMiioAdapter(BaseIoTAdapter):
     """
@@ -16,10 +16,10 @@ class XiaomiMiioAdapter(BaseIoTAdapter):
     async def _send_miio_command(self, ip: str, port: int, method: str, params: list) -> Dict[str, Any]:
         """
         Transmit a miio JSON-RPC command over UDP socket.
-        Falls back to simulated acknowledgement if physical hardware is offline.
+        Falls back to simulated acknowledgement if physical hardware is offline or simulation is active.
         """
         payload = json.dumps({"id": 1, "method": method, "params": params}).encode("utf-8")
-        if not SIMULATION_MODE and ip and ip != "127.0.0.1":
+        if not is_simulation_mode() and ip and ip != "127.0.0.1":
             try:
                 loop = asyncio.get_running_loop()
                 def _udp_exchange():
@@ -32,8 +32,9 @@ class XiaomiMiioAdapter(BaseIoTAdapter):
                     finally:
                         sock.close()
                 return await loop.run_in_executor(None, _udp_exchange)
-            except Exception:
-                pass # Hardware unreachable on LAN; fall through to simulated state
+            except Exception as e:
+                if not is_simulation_mode():
+                    return {"id": 1, "result": ["offline"], "error": str(e), "is_offline": True, "protocol": "miio-udp-jsonrpc"}
 
         # Simulated response for seamless demonstration
         return {"id": 1, "result": ["ok"], "protocol": "miio-udp-jsonrpc"}
@@ -42,9 +43,10 @@ class XiaomiMiioAdapter(BaseIoTAdapter):
         ip = device.get("ip_address", "127.0.0.1")
         port = device.get("port", self.default_port)
         res = await self._send_miio_command(ip, port, "set_power", ["on"])
+        is_online = not res.get("is_offline", False)
         return {
-            "power_state": True,
-            "is_online": True,
+            "power_state": True if is_online else device.get("power_state", False),
+            "is_online": is_online,
             "brand": self.brand_name,
             "protocol_log": f"miio UDP: set_power(['on']) -> {res.get('result', ['ok'])}"
         }
@@ -53,9 +55,10 @@ class XiaomiMiioAdapter(BaseIoTAdapter):
         ip = device.get("ip_address", "127.0.0.1")
         port = device.get("port", self.default_port)
         res = await self._send_miio_command(ip, port, "set_power", ["off"])
+        is_online = not res.get("is_offline", False)
         return {
             "power_state": False,
-            "is_online": True,
+            "is_online": is_online,
             "brand": self.brand_name,
             "protocol_log": f"miio UDP: set_power(['off']) -> {res.get('result', ['ok'])}"
         }
@@ -64,10 +67,11 @@ class XiaomiMiioAdapter(BaseIoTAdapter):
         ip = device.get("ip_address", "127.0.0.1")
         port = device.get("port", self.default_port)
         res = await self._send_miio_command(ip, port, "get_prop", ["power", "bright", "mode"])
+        is_online = not res.get("is_offline", False)
         return {
-            "power_state": device.get("power_state", True),
+            "power_state": device.get("power_state", True) if is_online else False,
             "level": device.get("level", 75),
-            "is_online": True,
+            "is_online": is_online,
             "brand": self.brand_name,
             "protocol_log": f"miio UDP: get_prop() -> {res.get('result', ['ok'])}"
         }
@@ -78,9 +82,10 @@ class XiaomiMiioAdapter(BaseIoTAdapter):
         clamped_val = max(0, min(100, int(value)))
         method = "set_bright" if parameter in ("brightness", "level") else f"set_{parameter}"
         res = await self._send_miio_command(ip, port, method, [clamped_val])
+        is_online = not res.get("is_offline", False)
         return {
             "level": clamped_val,
-            "is_online": True,
+            "is_online": is_online,
             "parameter": parameter,
             "brand": self.brand_name,
             "protocol_log": f"miio UDP: {method}([{clamped_val}]) -> {res.get('result', ['ok'])}"

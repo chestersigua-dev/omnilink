@@ -226,3 +226,47 @@ def test_account_deletion_cascade():
     # Verify user cannot login anymore
     relogin = client.post("/api/auth/login", json={"username": "delete_me_user", "password": "Password123!"})
     assert relogin.status_code == 401
+
+def test_disable_simulation_and_physical_iot_scan():
+    # Login as engineer_alex
+    login_resp = client.post("/api/auth/login", json={"username": "engineer_alex", "password": "SecurePassword123!"})
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Query simulation endpoint
+    sim_status = client.get("/api/iot/simulation")
+    assert sim_status.status_code == 200
+    assert "simulation_mode" in sim_status.json()
+
+    # 2. Perform scan with simulation explicitly DISABLED
+    phys_scan = client.get("/api/iot/scan?disable_simulation=true", headers=headers)
+    assert phys_scan.status_code == 200
+    phys_data = phys_scan.json()
+    assert phys_data["mode"] == "physical"
+    assert phys_data["simulation_disabled"] is True
+    # Verify no fake simulated devices are injected
+    for dev in phys_data["devices"]:
+        assert not dev["device_uid"].startswith("SIM_")
+
+    # 3. Toggle global simulation to FALSE
+    toggle_off = client.post("/api/iot/simulation", json={"simulation_mode": False}, headers=headers)
+    assert toggle_off.status_code == 200
+    assert toggle_off.json()["simulation_mode"] is False
+
+    # Scan without flags now runs physical scan
+    auto_scan = client.get("/api/iot/scan", headers=headers)
+    assert auto_scan.status_code == 200
+    assert auto_scan.json()["mode"] == "physical"
+    for dev in auto_scan.json()["devices"]:
+        assert not dev["device_uid"].startswith("SIM_")
+
+    # 4. Toggle global simulation back to TRUE
+    toggle_on = client.post("/api/iot/simulation", json={"simulation_mode": True}, headers=headers)
+    assert toggle_on.status_code == 200
+    assert toggle_on.json()["simulation_mode"] is True
+
+    # Scan with force_simulation=true or default returns simulated devices
+    sim_scan = client.get("/api/iot/scan?force_simulation=true", headers=headers)
+    assert sim_scan.status_code == 200
+    assert sim_scan.json()["count"] >= 5
+    assert any(d["device_uid"].startswith("SIM_") for d in sim_scan.json()["devices"])

@@ -2,7 +2,7 @@ import asyncio
 import socket
 from typing import Dict, Any
 from backend.adapters.base import BaseIoTAdapter
-from backend.config import SIMULATION_MODE
+from backend.config import is_simulation_mode
 
 class TCLAndroidTVAdapter(BaseIoTAdapter):
     """
@@ -14,18 +14,18 @@ class TCLAndroidTVAdapter(BaseIoTAdapter):
 
     async def _send_tcp_keyevent(self, ip: str, port: int, keyevent: int) -> Dict[str, Any]:
         """
-        Send an input keyevent command via raw TCP socket or simulate execution.
+        Send an input keyevent command via raw TCP socket or simulate execution when simulation is active.
         Keyevents:
         26 = KEYCODE_POWER
         24 = KEYCODE_VOLUME_UP
         25 = KEYCODE_VOLUME_DOWN
         """
-        if not SIMULATION_MODE and ip and ip != "127.0.0.1":
+        if not is_simulation_mode() and ip and ip != "127.0.0.1":
             try:
                 loop = asyncio.get_running_loop()
                 def _tcp_connect():
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    sock.settimeout(0.6)
+                    sock.settimeout(0.8)
                     try:
                         sock.connect((ip, port or self.default_port))
                         # Android ADB command handshake or remote packet
@@ -35,8 +35,9 @@ class TCLAndroidTVAdapter(BaseIoTAdapter):
                         sock.close()
                 raw_res = await loop.run_in_executor(None, _tcp_connect)
                 return {"status": "ok", "keyevent": keyevent, "raw": raw_res}
-            except Exception:
-                pass
+            except Exception as e:
+                if not is_simulation_mode():
+                    return {"status": "offline", "error": str(e), "is_offline": True, "protocol": "tcl-adb-tcp"}
 
         return {"status": "ok", "keyevent": keyevent, "protocol": "tcl-adb-tcp"}
 
@@ -44,9 +45,10 @@ class TCLAndroidTVAdapter(BaseIoTAdapter):
         ip = device.get("ip_address", "127.0.0.1")
         port = device.get("port", self.default_port)
         res = await self._send_tcp_keyevent(ip, port, 26) # KEYCODE_POWER
+        is_online = not res.get("is_offline", False)
         return {
-            "power_state": True,
-            "is_online": True,
+            "power_state": True if is_online else device.get("power_state", False),
+            "is_online": is_online,
             "brand": self.brand_name,
             "protocol_log": f"TCL ADB TCP: input keyevent 26 (POWER) -> {res.get('status')}"
         }
@@ -55,9 +57,10 @@ class TCLAndroidTVAdapter(BaseIoTAdapter):
         ip = device.get("ip_address", "127.0.0.1")
         port = device.get("port", self.default_port)
         res = await self._send_tcp_keyevent(ip, port, 26) # KEYCODE_POWER
+        is_online = not res.get("is_offline", False)
         return {
             "power_state": False,
-            "is_online": True,
+            "is_online": is_online,
             "brand": self.brand_name,
             "protocol_log": f"TCL ADB TCP: input keyevent 26 (SLEEP) -> {res.get('status')}"
         }
@@ -77,9 +80,10 @@ class TCLAndroidTVAdapter(BaseIoTAdapter):
         clamped_val = max(0, min(100, int(value)))
         key = 24 if clamped_val > device.get("level", 50) else 25
         res = await self._send_tcp_keyevent(ip, port, key)
+        is_online = not res.get("is_offline", False)
         return {
             "level": clamped_val,
-            "is_online": True,
+            "is_online": is_online,
             "parameter": parameter,
             "brand": self.brand_name,
             "protocol_log": f"TCL ADB TCP: Volume/Level adjusted to {clamped_val} via keycode {key}"

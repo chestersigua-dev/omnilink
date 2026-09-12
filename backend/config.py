@@ -22,6 +22,16 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440
 # Defaults to True for immediate capstone presentation, can be toggled via env or runtime flag
 SIMULATION_MODE = os.getenv("SIMULATION_MODE", "true").lower() in ("true", "1", "yes")
 
+def is_simulation_mode() -> bool:
+    """Return whether platform is currently running in simulation mode."""
+    return SIMULATION_MODE
+
+def set_simulation_mode(enabled: bool) -> bool:
+    """Dynamically toggle simulation mode at runtime."""
+    global SIMULATION_MODE
+    SIMULATION_MODE = bool(enabled)
+    return SIMULATION_MODE
+
 # Storage Directories
 STATIC_DIR = BASE_DIR / "static"
 UPLOAD_DIR = BASE_DIR / "uploads"

@@ -107,8 +107,32 @@ class OmniLinkAPI {
   }
 
   // --- IoT Devices & Scanner ---
-  async scanDevices(forceSimulation = false) {
-    return this.request(`/api/iot/scan?force_simulation=${forceSimulation}`);
+  async scanDevices(options = {}) {
+    let url = "/api/iot/scan";
+    if (typeof options === "boolean") {
+      url += `?force_simulation=${options}`;
+    } else if (typeof options === "object") {
+      const params = new URLSearchParams();
+      if (options.disableSimulation) {
+        params.append("disable_simulation", "true");
+      } else if (options.forceSimulation !== undefined) {
+        params.append("force_simulation", String(options.forceSimulation));
+      }
+      const qs = params.toString();
+      if (qs) url += `?${qs}`;
+    }
+    return this.request(url);
+  }
+
+  async getSimulationMode() {
+    return this.request("/api/iot/simulation");
+  }
+
+  async setSimulationMode(simulationMode) {
+    return this.request("/api/iot/simulation", {
+      method: "POST",
+      body: JSON.stringify({ simulation_mode: simulationMode })
+    });
   }
 
   async getDevices() {

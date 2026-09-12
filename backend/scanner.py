@@ -1,9 +1,9 @@
 import asyncio
 import socket
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from zeroconf import Zeroconf, ServiceBrowser, ServiceListener
-from backend.config import SIMULATION_MODE
+from backend.config import SIMULATION_MODE, is_simulation_mode
 
 logger = logging.getLogger("omnilink.scanner")
 
@@ -102,12 +102,15 @@ class MDNSCollector(ServiceListener):
             if info:
                 addresses = [socket.inet_ntoa(addr) for addr in info.addresses if len(addr) == 4]
                 ip = addresses[0] if addresses else "127.0.0.1"
+                # Filter out loopback
+                if ip.startswith("127."):
+                    return
                 self.discovered.append({
                     "name": name.split(".")[0],
                     "type": type_,
                     "ip": ip,
                     "port": info.port or 80,
-                    "server": info.server
+                    "server": info.server or "mDNS Node"
                 })
         except Exception:
             pass
@@ -151,70 +154,186 @@ async def scan_ssdp(timeout: float = 1.0) -> List[Dict[str, Any]]:
         pass
     return discovered
 
-async def scan_network(force_simulation: bool = False) -> List[Dict[str, Any]]:
+def _classify_ssdp_device(s: Dict[str, Any]) -> Dict[str, Any]:
+    """Parse raw SSDP response headers and classify brand, model, and device type."""
+    raw = s.get("raw", "").lower()
+    ip = s.get("ip", "127.0.0.1")
+    port = s.get("port", 1900)
+
+    brand = "generic"
+    device_type = "network_device"
+    name = f"UPnP Device ({ip})"
+    model = "SSDP Device"
+
+    if "samsung" in raw or "sec" in raw or "tizen" in raw:
+        brand = "samsung"
+        device_type = "tv"
+        name = f"Samsung Smart TV ({ip})"
+        model = "Tizen Smart TV"
+    elif "lg" in raw or "webos" in raw or "lge" in raw:
+        brand = "lg"
+        device_type = "tv"
+        name = f"LG webOS Device ({ip})"
+        model = "LG webOS Display"
+    elif "roku" in raw or "tcl" in raw:
+        brand = "tcl"
+        device_type = "tv"
+        name = f"TCL / Roku Device ({ip})"
+        model = "Roku Smart TV"
+    elif "tapo" in raw or "tp-link" in raw or "tplink" in raw:
+        brand = "tapo"
+        device_type = "plug"
+        name = f"Tapo Smart Device ({ip})"
+        model = "TP-Link Tapo"
+    elif "xiaomi" in raw or "miio" in raw or "yeelight" in raw:
+        brand = "xiaomi"
+        device_type = "purifier"
+        name = f"Xiaomi Smart Appliance ({ip})"
+        model = "Mi Smart Hardware"
+    elif "philips" in raw or "hue" in raw:
+        brand = "generic"
+        device_type = "bulb"
+        name = f"Philips Hue Bridge ({ip})"
+        model = "Hue Bridge"
+    elif "sonos" in raw:
+        brand = "generic"
+        device_type = "speaker"
+        name = f"Sonos Speaker ({ip})"
+        model = "Sonos HiFi"
+    elif "chromecast" in raw or "google" in raw:
+        brand = "generic"
+        device_type = "tv"
+        name = f"Google Cast Device ({ip})"
+        model = "Chromecast"
+
+    # Extract LOCATION header if present
+    location = None
+    for line in s.get("raw", "").splitlines():
+        if line.lower().startswith("location:"):
+            location = line.split(":", 1)[1].strip()
+            break
+
+    return {
+        "device_uid": f"SSDP_{ip.replace('.', '_')}",
+        "name": name,
+        "brand": brand,
+        "model": model,
+        "device_type": device_type,
+        "ip_address": ip,
+        "mac_address": "00:00:00:00:00:00",
+        "port": port,
+        "protocol": "ssdp-upnp",
+        "is_online": True,
+        "power_state": True,
+        "level": 50,
+        "state_metadata": {
+            "discovery_source": "SSDP UPnP",
+            "location": location or ""
+        }
+    }
+
+async def scan_network(
+    force_simulation: Optional[bool] = None,
+    disable_simulation: bool = False
+) -> List[Dict[str, Any]]:
     """
     Perform local subnet IoT discovery using mDNS & SSDP broadcast.
-    If simulation mode is active or no physical IoT units respond,
-    returns the complete 5-brand virtual device catalog.
+
+    - If disable_simulation is True: strictly scans the physical local network
+      and returns only real devices detected. Never injects simulated devices.
+    - If force_simulation is True: immediately returns the 5-brand virtual device catalog.
+    - If neither is explicitly passed: follows the system's runtime simulation mode configuration.
     """
-    real_results = []
+    # Determine whether simulation should run
+    if disable_simulation:
+        should_simulate = False
+    elif force_simulation is not None:
+        should_simulate = bool(force_simulation)
+    else:
+        should_simulate = is_simulation_mode()
 
-    if not force_simulation and not SIMULATION_MODE:
-        try:
-            # 1. mDNS Scan
-            zc = Zeroconf()
-            collector = MDNSCollector()
-            service_types = [
-                "_http._tcp.local.",
-                "_miio._udp.local.",
-                "_googlecast._tcp.local.",
-                "_airplay._tcp.local."
-            ]
-            browser = ServiceBrowser(zc, service_types, collector)
-            await asyncio.sleep(1.2)
-            zc.close()
+    if should_simulate:
+        logger.info("Returning simulated 5-brand device catalog (simulation mode active).")
+        return list(SIMULATED_DEVICES)
 
-            # 2. SSDP UPnP Scan
-            ssdp_devs = await scan_ssdp(timeout=0.8)
+    logger.info("Running live physical network scan (simulation DISABLED)...")
+    real_devices_by_ip: Dict[str, Dict[str, Any]] = {}
 
-            for m in collector.discovered:
-                real_results.append({
-                    "device_uid": f"MDNS_{m['ip'].replace('.', '_')}_{m['port']}",
-                    "name": m["name"],
-                    "brand": "xiaomi" if "miio" in m.get("type", "") else "generic",
-                    "model": m.get("server", "Network Device"),
-                    "device_type": "network_device",
-                    "ip_address": m["ip"],
-                    "mac_address": "00:00:00:00:00:00",
-                    "port": m["port"],
-                    "protocol": "mdns-zeroconf",
-                    "is_online": True,
-                    "power_state": True,
-                    "level": 50,
-                    "state_metadata": {"discovery_source": "mDNS"}
-                })
+    try:
+        # 1. mDNS Scan
+        zc = Zeroconf()
+        collector = MDNSCollector()
+        service_types = [
+            "_http._tcp.local.",
+            "_miio._udp.local.",
+            "_googlecast._tcp.local.",
+            "_airplay._tcp.local.",
+            "_hap._tcp.local.",
+            "_spotify-connect._tcp.local.",
+            "_sonos._tcp.local.",
+            "_roku-rcp._tcp.local.",
+            "_hue._tcp.local.",
+            "_smartthings._tcp.local."
+        ]
+        browser = ServiceBrowser(zc, service_types, collector)
+        await asyncio.sleep(1.2)
+        zc.close()
 
-            for s in ssdp_devs:
-                real_results.append({
-                    "device_uid": f"SSDP_{s['ip'].replace('.', '_')}",
-                    "name": f"UPnP Device ({s['ip']})",
-                    "brand": "samsung" if "samsung" in s["raw"].lower() else "lg" if "lg" in s["raw"].lower() else "generic",
-                    "model": "SSDP Root Device",
-                    "device_type": "tv",
-                    "ip_address": s["ip"],
-                    "mac_address": "00:00:00:00:00:00",
-                    "port": s["port"],
-                    "protocol": "ssdp-upnp",
-                    "is_online": True,
-                    "power_state": True,
-                    "level": 50,
-                    "state_metadata": {"discovery_source": "SSDP"}
-                })
-        except Exception as e:
-            logger.warning(f"Live network scan exception: {e}")
+        # Deduplicate and register mDNS devices
+        for m in collector.discovered:
+            ip = m["ip"]
+            brand = "xiaomi" if "miio" in m.get("type", "").lower() else "generic"
+            dev_type = "purifier" if brand == "xiaomi" else "network_device"
+            server_str = m.get("server", "Network Device")
+            
+            # Additional brand inference from name / server
+            lower_name = (m["name"] + " " + server_str).lower()
+            if "tapo" in lower_name or "tp-link" in lower_name:
+                brand = "tapo"
+                dev_type = "plug"
+            elif "samsung" in lower_name:
+                brand = "samsung"
+                dev_type = "tv"
+            elif "lg" in lower_name or "webos" in lower_name:
+                brand = "lg"
+                dev_type = "tv"
+            elif "tcl" in lower_name or "roku" in lower_name:
+                brand = "tcl"
+                dev_type = "tv"
 
-    # If simulation mode is requested or no physical IoT items were found in the current environment:
-    if force_simulation or SIMULATION_MODE or len(real_results) == 0:
-        return SIMULATED_DEVICES
+            real_devices_by_ip[ip] = {
+                "device_uid": f"MDNS_{ip.replace('.', '_')}_{m['port']}",
+                "name": m["name"],
+                "brand": brand,
+                "model": server_str,
+                "device_type": dev_type,
+                "ip_address": ip,
+                "mac_address": "00:00:00:00:00:00",
+                "port": m["port"],
+                "protocol": "mdns-zeroconf",
+                "is_online": True,
+                "power_state": True,
+                "level": 50,
+                "state_metadata": {"discovery_source": "mDNS", "service_type": m.get("type", "")}
+            }
 
-    return real_results
+        # 2. SSDP UPnP Scan
+        ssdp_devs = await scan_ssdp(timeout=0.8)
+        for s in ssdp_devs:
+            ip = s["ip"]
+            classified = _classify_ssdp_device(s)
+            # If we already have mDNS info, enrich it; otherwise add SSDP entry
+            if ip in real_devices_by_ip:
+                if classified["brand"] != "generic" and real_devices_by_ip[ip]["brand"] == "generic":
+                    real_devices_by_ip[ip]["brand"] = classified["brand"]
+                    real_devices_by_ip[ip]["device_type"] = classified["device_type"]
+                    real_devices_by_ip[ip]["name"] = classified["name"]
+                real_devices_by_ip[ip]["state_metadata"]["ssdp_location"] = classified["state_metadata"]["location"]
+            else:
+                real_devices_by_ip[ip] = classified
+
+    except Exception as e:
+        logger.warning(f"Live physical network scan exception: {e}")
+
+    # Return only physically discovered units (empty list if none found on LAN)
+    return list(real_devices_by_ip.values())
